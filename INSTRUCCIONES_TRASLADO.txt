@@ -1,0 +1,69 @@
+INSTRUCCIONES PARA LLEVAR LA APP DE CITAS AL PC PRINCIPAL
+=========================================================
+
+1. ANTES DE COPIAR
+------------------
+- Cierra la aplicación Streamlit (detén el server) para que la base de
+  datos SQLite no quede bloqueada.
+- Cierra también OneDrive si puedes, para evitar conflictos de sincronización
+  mientras copias.
+
+2. QUÉ COPIAR (copia la carpeta completa "Default Project")
+-----------------------------------------------------------
+Puedes copiar TODA la carpeta tal cual. Incluye:
+  * El código: app.py, core.py, services.py, storage.py, ui.py, mailing.py,
+    sms.py, requirements.txt, tests/
+  * Los datos: data/citas.db (con médicos, horarios y citas de la clínica).
+  * Las credenciales: mailing_credentials.json y sms_credentials.json.
+
+Los pasos y credenciales de la bbdd aunque no se suben a git, LA CARPETA
+completa sí los incluye cuando la copias a mano, así que al copiar la carpeta
+entera NO se pierde nada.
+
+3. CÓMO COPIAR
+--------------
+- Opción A (más sencilla): copia la carpeta a una unidad USB y pégala en el
+  PC principal.
+- Opción B: si ambos PC usan la misma cuenta de OneDrive, la carpeta ya está
+  sincronizada automáticamente; solo abre la app en el PC principal desde
+  esa misma ruta.
+- IMPORTANTE: no copiar la carpeta solo con el código y olvidar data/; sin
+  data/citas.db la app arranca vacía (sin médicos ni citas).
+
+4. EN EL PC PRINCIPAL
+---------------------
+1) Instala Python (3.10 o superior) si no lo tienes.
+2) Abre un terminal en la carpeta del proyecto y ejecuta:
+      pip install -r requirements.txt
+3) Arranca la app:
+      streamlit run app.py
+4) Abre el navegador en: http://localhost:8501
+
+5. VARIABLES DE ENTORNO OPCIONALES
+----------------------------------
+La app funciona sin tocarlas, pero si quieres cambiar la clave de la clínica
+o los credenciales sin editar los .json:
+
+  - Clave de acceso de la clínica (por defecto "clinic2026"):
+        CLINIC_PIN=tuclave streamlit run app.py
+  - Correo (SMTP de Gmail):
+        SMTP_HOST=smtp.gmail.com SMTP_PORT=587 SMTP_USER=tucuenta SMTP_PASS=tuclave SMTP_FROM=clinica@example.com streamlit run app.py
+  - SMS (Afilnet):
+        AFILNET_USER=tucuenta AFILNET_PASS=tuclave AFILNET_FROM=CLINICA streamlit run app.py
+    O usa los ficheros mailing_credentials.json / sms_credentials.json que ya
+    están en la carpeta.
+
+6. BACKUP Y CONTROL DE VERSIONES
+--------------------------------
+La carpeta ya es un repositorio git. Cada vez que hagas cambios y quieras
+guardar una versión:
+
+      git add -A
+      git commit -m "descripción de los cambios"
+
+Se pueden subir a un repositorio remoto (GitHub, etc.) teniendo en cuenta que
+las credenciales y la base de datos quedan excluidas (.gitignore).
+
+7. PRUEBAS (opcional)
+---------------------
+      python -m pytest tests -q
