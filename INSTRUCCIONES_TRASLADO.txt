@@ -1,15 +1,17 @@
 INSTRUCCIONES PARA LLEVAR LA APP DE CITAS AL PC PRINCIPAL
 =========================================================
 
+NOTA: desde la migración, el proyecto vive en una carpeta local fuera de
+OneDrive, en C:\Users\Manuel\citas_clinica. La copia antigua dentro de
+OneDrive (…\Documentos\Default Project) puede eliminarse cuando quieras.
+
 1. ANTES DE COPIAR
 ------------------
 - Cierra la aplicación Streamlit (detén el server) para que la base de
   datos SQLite no quede bloqueada.
-- Cierra también OneDrive si puedes, para evitar conflictos de sincronización
-  mientras copias.
 
-2. QUÉ COPIAR (copia la carpeta completa "Default Project")
------------------------------------------------------------
+2. QUÉ COPIAR (copia la carpeta completa "citas_clinica")
+---------------------------------------------------------
 Puedes copiar TODA la carpeta tal cual. Incluye:
   * El código: app.py, core.py, services.py, storage.py, ui.py, mailing.py,
     sms.py, requirements.txt, tests/
@@ -22,11 +24,10 @@ entera NO se pierde nada.
 
 3. CÓMO COPIAR
 --------------
-- Opción A (más sencilla): copia la carpeta a una unidad USB y pégala en el
-  PC principal.
-- Opción B: si ambos PC usan la misma cuenta de OneDrive, la carpeta ya está
-  sincronizada automáticamente; solo abre la app en el PC principal desde
-  esa misma ruta.
+- Opción A (más sencilla): copia la carpeta citas_clinica a una unidad USB y
+  pégala en el PC principal.
+- Opción B: copia la carpeta citas_clinica por red o con una herramienta de
+  transferencia de tu elección.
 - IMPORTANTE: no copiar la carpeta solo con el código y olvidar data/; sin
   data/citas.db la app arranca vacía (sin médicos ni citas).
 
