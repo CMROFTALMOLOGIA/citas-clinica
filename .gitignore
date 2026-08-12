@@ -5,3 +5,5 @@ data/
 .venv/
 mailing_credentials.json
 sms_credentials.json
+*Credenciales*.docx
+~$*
