@@ -38,12 +38,22 @@ CLINIC_PHONES = ["910821180", "63536415"]
 
 INSURANCE_OPTIONS = [
     "Privado (sin seguro)",
-    "SANITAS",
-    "ADESLAS",
+    "Adeslas",
+    "Adeslas Funcionarios",
+    "Asisa",
+    "Asisa Funcionarios",
+    "Axa",
+    "Caser",
+    "Cigna",
     "DKV",
-    "ASISA",
-    "CASER",
-    "AXA",
+    "HNA",
+    "Mapfre",
+    "Previasa",
+    "Previsas",
+    "Salus",
+    "Sanitas",
+    "Vitalicio",
+    "Vivaz",
     "Otra compañía…",
 ]
 

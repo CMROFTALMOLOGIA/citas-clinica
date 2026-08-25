@@ -35,7 +35,7 @@ def test_slots_for_windows_union_sorted():
 
 def test_validate_patient_data_ok():
     assert core.validate_patient_data("Ana", "García", "Ruiz", "612345678",
-                                      "ana@example.com", "SANITAS") == []
+                                      "ana@example.com", "Sanitas") == []
 
 
 def test_validate_patient_data_privado():
