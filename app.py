@@ -49,7 +49,6 @@ INSURANCE_OPTIONS = [
     "HNA",
     "Mapfre",
     "Previasa",
-    "Previsas",
     "Salus",
     "Sanitas",
     "Vitalicio",
