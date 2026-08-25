@@ -16,6 +16,8 @@ La navegación pública usa st.query_params: cada día es un enlace
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import hmac
 import os
 
 import streamlit as st
@@ -32,6 +34,10 @@ st.set_page_config(page_title="Citas Médicas", page_icon=":material/event:",
 
 # PIN de acceso a la zona de la clínica. Configurable por variable de entorno.
 CLINIC_PIN = os.environ.get("CLINIC_PIN", "clinic2026")
+
+# Bloqueo por intentos fallidos
+_MAX_PIN_ATTEMPTS = 5
+_LOCKOUT_SECONDS = 15 * 60  # 15 minutos
 
 # Teléfonos de contacto de la clínica (se muestran al pedir cita por teléfono).
 CLINIC_PHONES = ["910821180", "63536415"]
@@ -400,18 +406,66 @@ def pagina_clinica() -> None:
         st.rerun()
 
 
+def _daily_reset_code(pin: str) -> str:
+    """Código de recuperación diario derivado del PIN actual.
+
+    Cambia cada día a medianoche. Solo lo puede generar quien conoce el PIN.
+    """
+    today = dt.date.today().isoformat()
+    return hmac.new(pin.encode(), today.encode(),
+                    hashlib.sha256).hexdigest()[:8].upper()
+
+
 def acceso_clinica() -> None:
     st.title("Zona de la clínica")
     st.caption("Esta zona es privada y solo debe ser usada por el personal "
                "autorizado de la clínica.")
+
+    locked_until = st.session_state.get("pin_locked_until")
+    now = dt.datetime.now()
+    is_locked = locked_until and now < locked_until
+
+    if is_locked:
+        remaining = int((locked_until - now).total_seconds() // 60) + 1
+        st.warning(f"Demasiados intentos fallidos. "
+                   f"Inténtalo de nuevo en {remaining} min.")
+
+        st.markdown("---")
+        st.markdown("**¿Has olvidado la clave?**")
+        recovery = st.text_input("Código de recuperación diario",
+                                 type="password", key="recovery_input",
+                                 help="Código que cambia cada día. "
+                                      "Pide a tu administrador.")
+        if st.button("Restablecer acceso", key="btn_recovery"):
+            if recovery.strip().upper() == _daily_reset_code(CLINIC_PIN):
+                st.session_state.pop("pin_attempts", None)
+                st.session_state.pop("pin_locked_until", None)
+                st.success(f"Acceso restablecido. Tu clave actual es: "
+                           f"`{CLINIC_PIN}`")
+                st.rerun()
+            else:
+                st.error("Código de recuperación incorrecto.")
+        return
+
     pin = st.text_input("Código de acceso", type="password",
                         help="Pregunta a tu coordinador/a de la clínica.")
     if st.button("Entrar a la clínica", type="primary"):
         if pin.strip() == CLINIC_PIN:
             st.session_state["clinica_ok"] = True
+            st.session_state.pop("pin_attempts", None)
             st.rerun()
         else:
-            st.error("El código de acceso no es correcto.")
+            attempts = st.session_state.get("pin_attempts", 0) + 1
+            st.session_state["pin_attempts"] = attempts
+            remaining = _MAX_PIN_ATTEMPTS - attempts
+            if remaining <= 0:
+                st.session_state["pin_locked_until"] = (
+                    now + dt.timedelta(seconds=_LOCKOUT_SECONDS))
+                st.error("Demasiados intentos fallidos. "
+                         "Cuenta bloqueada 15 minutos.")
+            else:
+                st.error(f"Código incorrecto. Te quedan {remaining} "
+                         f"{'intento' if remaining == 1 else 'intentos'}.")
 
 
 def panel_citas() -> None:
