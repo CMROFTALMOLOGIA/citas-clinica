@@ -97,17 +97,11 @@ def pagina_publica() -> None:
     col_cal, col_agenda = st.columns([1, 1.9], gap="medium")
 
     with col_cal:
-        c_prev, c_center, c_next = st.columns([1, 2, 1])
         py, pm = previo(y, m)
         ny, nm = siguiente(y, m)
-        with c_prev:
-            st.link_button("← Mes anterior", url_mes(py, pm),
-                           use_container_width=True)
-        with c_center:
-            st.markdown(f"#### {core.MONTHS_ES[m - 1]} {y}")
-        with c_next:
-            st.link_button("Mes siguiente →", url_mes(ny, nm),
-                           use_container_width=True)
+        st.markdown(ui.build_nav_mes_html(y, m, url_mes(py, pm),
+                                          url_mes(ny, nm)),
+                    unsafe_allow_html=True)
 
         ocupacion = services.ocupacion_mes(y, m, repo)
         st.markdown(ui.build_calendar_html(y, m, url_mes(y, m), dia_efectivo,
@@ -244,7 +238,15 @@ def vista_publica_dia(iso: str) -> None:
         return
 
     opciones = {m["id"]: f"{m['nombre']} · {m['especialidad']}" for m in activos}
-    sel = st.radio("Selecciona el profesional", list(opciones.keys()),
+    ids = list(opciones.keys())
+    q = st.query_params
+    try:
+        sel_q = int(q.get("mid"))
+    except (TypeError, ValueError):
+        sel_q = None
+    sel = sel_q if sel_q in ids else ids[0]
+    sel = st.radio("Selecciona el profesional", ids,
+                   index=ids.index(sel),
                    format_func=lambda i: opciones[i])
 
     medico = repo.get_medico(sel)
@@ -256,17 +258,15 @@ def vista_publica_dia(iso: str) -> None:
     if not libres:
         st.warning("No quedan huecos libres este día.")
     else:
-        cols_h = st.columns(5)
-        for i, h in enumerate(libres):
-            if cols_h[i % 5].button(h, key=f"hr_{sel}_{fecha}_{h}",
-                                    use_container_width=True):
-                st.session_state["de"] = h
-                st.session_state["mid"] = sel
-                st.rerun()
+        def url_slot(h):
+            return (f"/?y={fecha.year}&m={fecha.month}&dia={iso}"
+                    f"&mid={sel}&h={h}")
+        st.markdown(ui.build_huecos_html(libres, url_slot),
+                    unsafe_allow_html=True)
 
-    if ("de" in st.session_state and st.session_state.mid == sel
-            and st.session_state.de in libres):
-        form_cita(fecha, sel, opciones[sel], st.session_state.de)
+    hora_sel = q.get("h")
+    if hora_sel in libres:
+        form_cita(fecha, sel, opciones[sel], hora_sel)
 
 
 def form_cita(fecha: dt.date, medico_id: int, etiqueta: str, hora: str) -> None:
@@ -323,8 +323,11 @@ def form_cita(fecha: dt.date, medico_id: int, etiqueta: str, hora: str) -> None:
         confirmar_cita_por_notificaciones(
             codigo, fecha, hora, medico_id, nombre, apellido1, apellido2,
             email, telefono)
-        st.session_state.pop("de", None)
-        st.session_state.pop("mid", None)
+        for k in ("h", "mid"):
+            try:
+                del st.query_params[k]
+            except Exception:
+                pass
         st.success(
             f"**Cita confirmada.**  \n"
             f"Código: `{codigo}`  \n"

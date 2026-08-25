@@ -11,21 +11,57 @@ def _app() -> AppTest:
     return AppTest.from_file(APP, default_timeout=120)
 
 
-def _goto_dia(at, iso="2026-08-17"):
-    at.query_params["y"] = "2026"
-    at.query_params["m"] = "8"
-    at.query_params["dia"] = iso
+def _lunes_futuro():
+    """Próximo lunes estrictamente futuro (la agenda pública bloquea el pasado)."""
+    import datetime as _dt
+
+    hoy = _dt.date.today()
+    lunes = hoy + _dt.timedelta(days=(7 - hoy.weekday()) % 7)
+    if lunes <= hoy:
+        lunes += _dt.timedelta(days=7)
+    return lunes.isoformat()
+
+
+def _goto_dia(at, iso=None):
+    import datetime as _dt
+
+    fecha = _dt.date.fromisoformat(iso or _lunes_futuro())
+    at.query_params["y"] = str(fecha.year)
+    at.query_params["m"] = str(fecha.month)
+    at.query_params["dia"] = fecha.isoformat()
+    at.run()
+
+
+def _elegir_hueco(at, iso=None):
+    # Selecciona el primer hueco libre del primer profesional activo
+    # (equivalente a que el paciente pulse uno de los enlaces del día).
+    import datetime as _dt
+
+    import services as sv
+    from storage import Repo
+
+    iso = iso or _lunes_futuro()
+    r = Repo()
+    sv.seed_medicos(r)
+    fecha = _dt.date.fromisoformat(iso)
+    mid = sv.medicos_activos(fecha, r)[0]["id"]
+    hora = sv.slots_disponibles(fecha, mid, r)[0]
+    r.close()
+    at.query_params["mid"] = str(mid)
+    at.query_params["h"] = hora
     at.run()
 
 
 def test_reserva_completa():
+    import datetime as _dt
+
     at = _app()
-    _goto_dia(at)
+    iso = _lunes_futuro()
+    _goto_dia(at, iso)
     assert len(at.exception) == 0
 
     # Seleccionamos la primera hora libre.
-    at.button[0].click()
-    at.run()
+    _elegir_hueco(at)
     assert len(at.exception) == 0
 
     # El formulario aparece
@@ -54,15 +90,15 @@ def test_reserva_completa():
     assert success, "no hay mensaje de éxito"
     assert "Cita confirmada" in success[0].value
     # El mensaje debe mostrar el día y la hora, como en el correo.
-    assert "Fecha: 17/08/2026" in success[0].value
+    fecha_iso = _dt.date.fromisoformat(iso).strftime("%d/%m/%Y")
+    assert f"Fecha: {fecha_iso}" in success[0].value
     assert "Hora: " in success[0].value
 
 
 def test_validacion_nombre_vacio():
     at = _app()
     _goto_dia(at)
-    at.button[0].click()
-    at.run()
+    _elegir_hueco(at)
     btn = [b for b in at.button if "Confirmar cita" in b.label][0]
     btn.click()
     at.run()
@@ -104,8 +140,7 @@ def test_huecos_sin_intervalo():
 def test_cita_por_telefono_muestra_telefonos():
     at = _app()
     _goto_dia(at)
-    at.button[0].click()
-    at.run()
+    _elegir_hueco(at)
     assert len(at.exception) == 0
 
     # Por defecto la cita es por Web: no se muestran los teléfonos.
@@ -165,8 +200,7 @@ def test_zona_publica_no_filtra_datos_pacientes():
     # Reservamos una cita con datos muy identificables.
     at = _app()
     _goto_dia(at)
-    at.button[0].click()
-    at.run()
+    _elegir_hueco(at)
     at.text_input[0].set_value("Confidencial")
     at.text_input[1].set_value("Paciente")
     at.text_input[2].set_value("Especial")

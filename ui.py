@@ -14,6 +14,60 @@ import core
 WEEK_HEADERS = core.WEEKDAY_SHORT
 
 
+def build_nav_mes_html(anyo: int, mes: int, url_prev: str,
+                       url_next: str) -> str:
+    """Barra compacta de navegación mensual (‹ Mes anterior | título | ›).
+
+    Los enlaces no parten palabras (white-space:nowrap) y ocupan lo mínimo.
+    """
+    etiqueta = f"{core.MONTHS_ES[mes - 1]} {anyo}"
+    return f"""
+    <style>
+      .nav-mes {{ display:flex; align-items:center; justify-content:center;
+                  gap:8px; margin:.15rem 0 .55rem; }}
+      .nav-mes a.nav-btn {{ white-space:nowrap; font-size:.8rem;
+        font-weight:600; color:#1d4ed8; background:#eff6ff;
+        border:1px solid #bfdbfe; border-radius:8px;
+        padding:.26rem .55rem; text-decoration:none; line-height:1.15; }}
+      .nav-mes a.nav-btn:hover {{ background:#dbeafe; border-color:#93c5fd; }}
+      .nav-mes .nav-titulo {{ font-size:1rem; font-weight:700;
+        color:#111827; min-width:8.5em; text-align:center; }}
+      @media (max-width:640px) {{
+        .nav-mes {{ gap:5px; }}
+        .nav-mes a.nav-btn {{ padding:.2rem .4rem; }}
+        .nav-mes .nav-titulo {{ min-width:7em; font-size:.92rem; }}
+      }}
+    </style>
+    <div class='nav-mes'>
+      <a class='nav-btn' href='{url_prev}'>&#8249;&nbsp;Mes anterior</a>
+      <span class='nav-titulo'>{etiqueta}</span>
+      <a class='nav-btn' href='{url_next}'>Mes siguiente&nbsp;&#8250;</a>
+    </div>
+    """
+
+
+def build_huecos_html(horas, href_for) -> str:
+    """Huecos horarios como enlaces compactos en rejilla flexible.
+
+    href_for(hora) devuelve la URL que selecciona ese hueco. Ocupan mucho
+    menos espacio vertical que los botones nativos, dejando visible el
+    formulario de datos del paciente sin desplazarse.
+    """
+    items = "".join(
+        f"<a class='slot-hora' href='{href_for(h)}'>{h}</a>" for h in horas)
+    return f"""
+    <style>
+      .huecos-citas {{ display:flex; flex-wrap:wrap; gap:5px 6px;
+                       margin:.15rem 0 .55rem; max-width:30rem; }}
+      .slot-hora {{ font-size:.84rem; font-weight:600; color:#1d4ed8;
+        background:#eff6ff; border:1px solid #bfdbfe; border-radius:7px;
+        padding:.16rem .5rem; text-decoration:none; line-height:1.2; }}
+      .slot-hora:hover {{ background:#dbeafe; border-color:#93c5fd; }}
+    </style>
+    <div class='huecos-citas'>{items}</div>
+    """
+
+
 def build_calendar_html(anyo: int, mes: int, link_base: str,
                         dia_seleccionado: str | None,
                         ocupacion: dict[int, dict],
