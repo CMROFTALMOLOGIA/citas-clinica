@@ -32,23 +32,39 @@ def _goto_dia(at, iso=None):
     at.run()
 
 
-def _elegir_hueco(at, iso=None):
-    # Selecciona el primer hueco libre del primer profesional activo
-    # (equivalente a que el paciente pulse uno de los enlaces del día).
+def _primer_hueco(iso):
+    """Primera hora libre del primer profesional activo para el día iso."""
     import datetime as _dt
 
     import services as sv
     from storage import Repo
 
-    iso = iso or _lunes_futuro()
     r = Repo()
     sv.seed_medicos(r)
     fecha = _dt.date.fromisoformat(iso)
     mid = sv.medicos_activos(fecha, r)[0]["id"]
     hora = sv.slots_disponibles(fecha, mid, r)[0]
     r.close()
-    at.query_params["mid"] = str(mid)
-    at.query_params["h"] = hora
+    return hora
+
+
+def _paso1(at, nombre="María", ap1="García", ap2="López",
+           tel="612345678", email="maria@example.com"):
+    """Rellena el paso 1 (datos) y pulsa Continuar."""
+    at.text_input[0].set_value(nombre)
+    at.text_input[1].set_value(ap1)
+    at.text_input[2].set_value(ap2)
+    at.text_input[3].set_value(tel)
+    at.text_input[4].set_value(email)
+    [b for b in at.button if b.label == "Continuar ›"][0].click()
+    at.run()
+
+
+def _elegir_hora_y_confirmar(at, iso=None):
+    """En el paso 2: elige la primera hora libre y confirma la cita."""
+    at.segmented_control[0].set_value(_primer_hueco(iso or _lunes_futuro()))
+    at.run()
+    [b for b in at.button if "Confirmar cita" in b.label][0].click()
     at.run()
 
 
@@ -60,11 +76,7 @@ def test_reserva_completa():
     _goto_dia(at, iso)
     assert len(at.exception) == 0
 
-    # Seleccionamos la primera hora libre.
-    _elegir_hueco(at)
-    assert len(at.exception) == 0
-
-    # El formulario aparece
+    # Paso 1: el formulario de datos aparece
     labels = [t.label for t in at.text_input]
     assert "Nombre" in labels
     assert "Primer apellido" in labels
@@ -72,18 +84,16 @@ def test_reserva_completa():
     assert "Teléfono (9 dígitos)" in labels
     assert "Email" in labels
 
-    # Rellenamos los 5 campos
-    at.text_input[0].set_value("María")
-    at.text_input[1].set_value("García")
-    at.text_input[2].set_value("López")
-    at.text_input[3].set_value("612345678")
-    at.text_input[4].set_value("maria@example.com")
+    # Rellenamos los 5 campos y continuamos
+    _paso1(at)
+    assert len(at.exception) == 0, [e.message for e in at.exception]
 
-    # Apretamos enviar
-    buttons = [b for b in at.button if "Confirmar cita" in b.label]
-    assert buttons, "no hay botón Confirmar cita"
-    buttons[0].click()
-    at.run()
+    # Paso 2: se pide elegir doctor y hora
+    mds = [m.value for m in at.markdown]
+    assert any("Seleccione el doctor y la hora deseada" in m for m in mds), mds
+
+    # Elegimos la primera hora libre y confirmamos
+    _elegir_hora_y_confirmar(at, iso)
     assert len(at.exception) == 0, [e.message for e in at.exception]
 
     success = [x for x in at.success]
@@ -98,9 +108,7 @@ def test_reserva_completa():
 def test_validacion_nombre_vacio():
     at = _app()
     _goto_dia(at)
-    _elegir_hueco(at)
-    btn = [b for b in at.button if "Confirmar cita" in b.label][0]
-    btn.click()
+    [b for b in at.button if b.label == "Continuar ›"][0].click()
     at.run()
     errors = [e for e in at.error]
     assert len(errors) >= 2
@@ -123,24 +131,28 @@ def test_no_se_solicita_cita_en_fecha_pasada():
     assert len(at.exception) == 0
     infos = [i.value for i in at.info]
     assert any("ya ha pasado" in i for i in infos), infos
-    huecos = any("Huecos libres de" in m.value for m in at.markdown)
-    assert not huecos, "no debe mostrar huecos en una fecha pasada"
+    assert not at.segmented_control, \
+        "no deben mostrarse huecos en una fecha pasada"
 
 
 def test_huecos_sin_intervalo():
     at = _app()
-    _goto_dia(at)
+    iso = _lunes_futuro()
+    _goto_dia(at, iso)
     assert len(at.exception) == 0
-    mds = [m.value for m in at.markdown]
-    assert any("Huecos libres de" in m for m in mds), mds
-    assert not any("intervalo" in m.lower() for m in mds), \
+    # Avanzamos al paso 2: ahí se ofrecen las horas libres.
+    _paso1(at)
+    assert len(at.exception) == 0
+    labels = [s.label for s in at.segmented_control]
+    assert "Horas libres" in labels, labels
+    todo = " ".join([m.value for m in at.markdown] + labels).lower()
+    assert "intervalo" not in todo, \
         "no debe mostrarse el comentario de intervalo"
 
 
 def test_cita_por_telefono_muestra_telefonos():
     at = _app()
     _goto_dia(at)
-    _elegir_hueco(at)
     assert len(at.exception) == 0
 
     # Por defecto la cita es por Web: no se muestran los teléfonos.
@@ -199,16 +211,11 @@ def test_pagina_clinica():
 def test_zona_publica_no_filtra_datos_pacientes():
     # Reservamos una cita con datos muy identificables.
     at = _app()
-    _goto_dia(at)
-    _elegir_hueco(at)
-    at.text_input[0].set_value("Confidencial")
-    at.text_input[1].set_value("Paciente")
-    at.text_input[2].set_value("Especial")
-    at.text_input[3].set_value("699000111")
-    at.text_input[4].set_value("confidencial@example.com")
-    btn = [b for b in at.button if "Confirmar cita" in b.label][0]
-    btn.click()
-    at.run()
+    iso = _lunes_futuro()
+    _goto_dia(at, iso)
+    _paso1(at, nombre="Confidencial", ap1="Paciente", ap2="Especial",
+           tel="699000111", email="confidencial@example.com")
+    _elegir_hora_y_confirmar(at, iso)
     assert len(at.exception) == 0
     assert [x for x in at.success], "no se registró la cita"
 

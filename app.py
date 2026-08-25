@@ -237,43 +237,26 @@ def vista_publica_dia(iso: str) -> None:
         st.warning("Ningún profesional atiende este día.")
         return
 
-    opciones = {m["id"]: f"{m['nombre']} · {m['especialidad']}" for m in activos}
-    ids = list(opciones.keys())
-    q = st.query_params
-    try:
-        sel_q = int(q.get("mid"))
-    except (TypeError, ValueError):
-        sel_q = None
-    sel = sel_q if sel_q in ids else ids[0]
-    sel = st.radio("Selecciona el profesional", ids,
-                   index=ids.index(sel),
-                   format_func=lambda i: opciones[i])
+    if st.session_state.get("res_exito"):
+        _pantalla_exito()
+        return
 
-    medico = repo.get_medico(sel)
-    hora_actual = dt.datetime.now().time() if fecha == dt.date.today() else None
-    libres = services.slots_disponibles(fecha, sel, repo, hora_actual)
+    if st.session_state.get("res_datos"):
+        _paso_2_doctor_y_hora(fecha)
+        return
 
-    st.markdown(f"**Huecos libres de {opciones[sel]}**")
-
-    if not libres:
-        st.warning("No quedan huecos libres este día.")
-    else:
-        def url_slot(h):
-            return (f"/?y={fecha.year}&m={fecha.month}&dia={iso}"
-                    f"&mid={sel}&h={h}")
-        st.markdown(ui.build_huecos_html(libres, url_slot),
-                    unsafe_allow_html=True)
-
-    hora_sel = q.get("h")
-    if hora_sel in libres:
-        form_cita(fecha, sel, opciones[sel], hora_sel)
+    _paso_1_datos(fecha)
 
 
-def form_cita(fecha: dt.date, medico_id: int, etiqueta: str, hora: str) -> None:
+def _paso_1_datos(fecha: dt.date) -> None:
+    st.markdown("**1 · Tus datos**")
+    st.caption(f"Solicitud para el {fecha.strftime('%d/%m/%Y')}. "
+               "Rellena tus datos y después elegirás al doctor y la hora.")
+
     # Tipo de cita fuera del formulario: elegir Teléfono recalcula la página y
     # muestra los teléfonos de la clínica de forma destacada.
     tipo = st.segmented_control("Tipo de cita", ["Web", "Teléfono"],
-                                default="Web", key=f"tipo_{medico_id}_{hora}")
+                                default="Web", key="tipo_cita")
     if tipo == "Teléfono":
         contactos = " &nbsp;&nbsp;·&nbsp;&nbsp; ".join(
             f"<span style='font-size:1.9rem;font-weight:700;color:#c2410c'>"
@@ -285,10 +268,7 @@ def form_cita(fecha: dt.date, medico_id: int, etiqueta: str, hora: str) -> None:
             f"</div>",
             unsafe_allow_html=True)
 
-    with st.form(f"form_{medico_id}_{hora}"):
-        st.subheader("Solicitar cita")
-        st.caption(f"{etiqueta} · {fecha.strftime('%d/%m/%Y')} · {hora} h")
-
+    with st.form("form_datos_paciente"):
         c1, c2, c3 = st.columns(3)
         nombre = c1.text_input("Nombre")
         apellido1 = c2.text_input("Primer apellido")
@@ -299,42 +279,92 @@ def form_cita(fecha: dt.date, medico_id: int, etiqueta: str, hora: str) -> None:
         seguro = c6.selectbox("Compañía de seguro", INSURANCE_OPTIONS)
         if seguro == "Otra compañía…":
             seguro = st.text_input("Nombre de la compañía")
-        enviar = st.form_submit_button("Confirmar cita", type="primary")
+        continuar = st.form_submit_button("Continuar ›", type="primary")
 
-    if enviar:
+    if continuar:
         er = core.validate_patient_data(nombre, apellido1, apellido2,
                                         telefono, email, seguro)
         if er:
             for e in er:
                 st.error(e)
             return
-        if hora not in services.slots_disponibles(fecha, medico_id, repo):
+        st.session_state["res_datos"] = {
+            "nombre": nombre.strip(),
+            "apellido1": apellido1.strip(),
+            "apellido2": apellido2.strip(),
+            "telefono": telefono.strip(),
+            "email": email.strip(),
+            "seguro": seguro.strip(),
+            "tipo": "telefono" if tipo == "Teléfono" else "web",
+        }
+        st.rerun()
+
+
+def _paso_2_doctor_y_hora(fecha: dt.date) -> None:
+    datos = st.session_state["res_datos"]
+    st.markdown("**1 · Tus datos** ✔")
+    st.caption(f"{datos['nombre']} {datos['apellido1']} "
+               f"{datos['apellido2']}")
+    if st.button("‹ Modificar mis datos", key="volver_datos"):
+        st.session_state.pop("res_datos", None)
+        st.rerun()
+
+    st.markdown("**2 · Seleccione el doctor y la hora deseada**")
+
+    activos = services.medicos_activos(fecha, repo)
+    opciones = {m["id"]: f"{m['nombre']} · {m['especialidad']}"
+                for m in activos}
+    ids = list(opciones.keys())
+    sel = st.radio("Doctor", ids, index=0,
+                   format_func=lambda i: opciones[i])
+
+    hora_actual = dt.datetime.now().time() if fecha == dt.date.today() else None
+    libres = services.slots_disponibles(fecha, sel, repo, hora_actual)
+
+    hora = None
+    if not libres:
+        st.warning("No quedan huecos libres este día con este profesional.")
+    else:
+        hora = st.segmented_control("Horas libres", libres,
+                                    key=f"horas_{sel}")
+
+    if st.button("Confirmar cita", type="primary", disabled=hora is None):
+        if hora not in services.slots_disponibles(fecha, sel, repo):
             st.error("Esa hora acaba de ser ocupada. Elige otra.")
             return
-        tipo_db = "telefono" if tipo == "Teléfono" else "web"
         try:
-            codigo = repo.add_cita(medico_id, fecha.isoformat(), hora,
-                                   tipo_db, nombre.strip(), apellido1.strip(),
-                                   apellido2.strip(), telefono.strip(),
-                                   email.strip(), seguro.strip())
+            codigo = repo.add_cita(sel, fecha.isoformat(), hora,
+                                   datos["tipo"], datos["nombre"],
+                                   datos["apellido1"], datos["apellido2"],
+                                   datos["telefono"], datos["email"],
+                                   datos["seguro"])
         except RuntimeError as ex:
             st.error(str(ex))
             return
         confirmar_cita_por_notificaciones(
-            codigo, fecha, hora, medico_id, nombre, apellido1, apellido2,
-            email, telefono)
-        for k in ("h", "mid"):
-            try:
-                del st.query_params[k]
-            except Exception:
-                pass
-        st.success(
-            f"**Cita confirmada.**  \n"
-            f"Código: `{codigo}`  \n"
-            f"Fecha: {fecha.strftime('%d/%m/%Y')} "
-            f"({core.WEEKDAY_NAMES[fecha.weekday()]})  \n"
-            f"Hora: {hora} h  \n"
-            f"Profesional: {etiqueta}")
+            codigo, fecha, hora, sel, datos["nombre"], datos["apellido1"],
+            datos["apellido2"], datos["email"], datos["telefono"])
+        st.session_state["res_exito"] = {
+            "codigo": codigo, "fecha": fecha.isoformat(), "hora": hora,
+            "etiqueta": opciones[sel],
+        }
+        st.session_state.pop("res_datos", None)
+        st.rerun()
+
+
+def _pantalla_exito() -> None:
+    ex = st.session_state["res_exito"]
+    f = dt.date.fromisoformat(ex["fecha"])
+    st.success(
+        f"**Cita confirmada.**  \n"
+        f"Código: `{ex['codigo']}`  \n"
+        f"Fecha: {f.strftime('%d/%m/%Y')} "
+        f"({core.WEEKDAY_NAMES[f.weekday()]})  \n"
+        f"Hora: {ex['hora']} h  \n"
+        f"Profesional: {ex['etiqueta']}")
+    if st.button("Nueva reserva", key="nueva_reserva"):
+        st.session_state.pop("res_exito", None)
+        st.rerun()
 
 
 # ===== Zona clínica (personal) ===========================================

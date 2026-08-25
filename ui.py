@@ -46,28 +46,6 @@ def build_nav_mes_html(anyo: int, mes: int, url_prev: str,
     """
 
 
-def build_huecos_html(horas, href_for) -> str:
-    """Huecos horarios como enlaces compactos en rejilla flexible.
-
-    href_for(hora) devuelve la URL que selecciona ese hueco. Ocupan mucho
-    menos espacio vertical que los botones nativos, dejando visible el
-    formulario de datos del paciente sin desplazarse.
-    """
-    items = "".join(
-        f"<a class='slot-hora' href='{href_for(h)}'>{h}</a>" for h in horas)
-    return f"""
-    <style>
-      .huecos-citas {{ display:flex; flex-wrap:wrap; gap:5px 6px;
-                       margin:.15rem 0 .55rem; max-width:30rem; }}
-      .slot-hora {{ font-size:.84rem; font-weight:600; color:#1d4ed8;
-        background:#eff6ff; border:1px solid #bfdbfe; border-radius:7px;
-        padding:.16rem .5rem; text-decoration:none; line-height:1.2; }}
-      .slot-hora:hover {{ background:#dbeafe; border-color:#93c5fd; }}
-    </style>
-    <div class='huecos-citas'>{items}</div>
-    """
-
-
 def build_calendar_html(anyo: int, mes: int, link_base: str,
                         dia_seleccionado: str | None,
                         ocupacion: dict[int, dict],
