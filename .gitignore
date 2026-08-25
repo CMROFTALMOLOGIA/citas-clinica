@@ -7,3 +7,9 @@ mailing_credentials.json
 sms_credentials.json
 *Credenciales*.docx
 ~$*
+
+# Servidor propio
+.env
+/backups/
+caddy_data/
+caddy_config/

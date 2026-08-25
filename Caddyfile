@@ -1,0 +1,35 @@
+# Reemplaza tudominio.com con tu dominio real.
+# Caddy obtiene el certificado HTTPS automáticamente vía Let's Encrypt.
+
+tudominio.com {
+    reverse_proxy app:8501 {
+        # Streamlit usa WebSockets
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {remote_host}
+    }
+
+    # Headers de seguridad
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options SAMEORIGIN
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
+    # Compresión gzip
+    encode gzip
+
+    # Log de accesos
+    log {
+        output file /data/access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}
+
+# Si no tienes dominio aún, usa la IP directa (ver SETUP_SERVIDOR.md)
+# :443 {
+#     reverse_proxy app:8501
+#     tls internal
+# }
